@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitFast Ultra - The Ultimate GitHub IDE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+                    },
+                    colors: {
+                        'sidebar': '#0f172a',
+                        'editor': '#1e293b',
+                        'accent': '#38bdf8',
+                        'success': '#4ade80',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+        
+        :root {
+            --glass-border: 1px solid rgba(255, 255, 255, 0.08);
+            --glass-bg: rgba(30, 41, 59, 0.7);
+        }
+
+        body {
+            background-color: #0f1115;
+            color: #e2e8f0;
+            overflow: hidden; /* App-like feel */
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Utilities */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: var(--glass-border);
+        }
+
+        .code-area {
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1.6;
+            tab-size: 4;
+            background: transparent;
+            color: #e2e8f0;
+            caret-color: #38bdf8;
+        }
+        
+        /* Syntax highlighting-ish colors for plain text context */
+        .token-keyword { color: #c678dd; }
+        .token-string { color: #98c379; }
+
+        /* Loader */
+        .loader-ring {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+        }
+        .loader-ring:after {
+            content: " ";
+            display: block;
+            width: 16px;
+            height: 16px;
+            margin: 2px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            border-color: #fff transparent #fff transparent;
+            animation: loader-ring 1.2s linear infinite;
+        }
+        @keyframes loader-ring {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Animations */
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-in { animation: slideIn 0.3s ease-out forwards; }
+
+        /* Preview Frame */
+        #previewFrame {
+            background: white;
+            transition: opacity 0.2s;
+        }
+        
+        /* Tab Active State */
+        .tab-btn.active {
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            border-bottom: 2px solid #38bdf8;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col text-sm">
+
+    <!-- TOP BAR -->
+    <header class="h-14 border-b border-slate-800 bg-[#0b0d11] flex items-center justify-between px-4 shrink-0 z-20">
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 group cursor-pointer">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
+                    <i class="fas fa-bolt text-white text-sm"></i>
+                </div>
+                <h1 class="font-bold text-lg tracking-tight text-slate-100">GitFast <span class="text-accent font-black text-xs uppercase tracking-widest ml-1 bg-accent/10 px-2 py-0.5 rounded-full">Ultra</span></h1>
+            </div>
+            
+            <div class="h-6 w-px bg-slate-800 mx-2"></div>
+
+            <!-- Repo Selector -->
+            <div class="relative group">
+                <div class="flex items-center gap-2 bg-slate-800/50 hover:bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-md px-3 py-1.5 transition-all cursor-pointer w-64" onclick="toggleRepoDropdown()">
+                    <i class="fas fa-box-archive text-slate-400 text-xs"></i>
+                    <input type="text" id="repoNameInput" class="bg-transparent border-none outline-none text-xs w-full text-slate-200 placeholder-slate-500 font-mono" placeholder="username/repo-name" autocomplete="off" oninput="handleRepoInput(this.value)">
+                    <i class="fas fa-chevron-down text-slate-500 text-[10px]"></i>
+                </div>
+                <!-- Dropdown -->
+                <div id="repoDropdown" class="absolute top-full left-0 mt-2 w-80 bg-[#1e293b] border border-slate-700 rounded-lg shadow-2xl overflow-hidden hidden z-50">
+                    <div class="p-2 border-b border-slate-700 bg-slate-900/50">
+                        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Your Repositories</p>
+                    </div>
+                    <div id="repoList" class="max-h-60 overflow-y-auto">
+                        <!-- Items injected here -->
+                        <div class="p-4 text-center text-slate-500 text-xs italic">Connect token to load repos</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <!-- User Status -->
+            <div id="userProfile" class="hidden items-center gap-3 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800">
+                <img id="userAvatar" src="" class="w-5 h-5 rounded-full border border-slate-700">
+                <span id="userName" class="font-medium text-slate-300 text-xs">User</span>
+            </div>
+
+            <!-- Token Input (Compact) -->
+            <div id="tokenContainer" class="relative group">
+                <input type="password" id="ghToken" oninput="saveToken(this.value)" class="bg-slate-900 border border-slate-700 focus:border-accent rounded-full py-1.5 pl-4 pr-10 text-xs outline-none w-32 focus:w-64 transition-all duration-300" placeholder="GitHub Token...">
+                <i class="fas fa-key absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
+            </div>
+            
+            <a href="https://github.com/settings/tokens/new?scopes=repo,workflow" target="_blank" class="text-xs text-slate-500 hover:text-accent transition-colors" title="Get Token"><i class="fas fa-external-link-alt"></i></a>
+        </div>
+    </header>
+
+    <!-- MAIN WORKSPACE -->
+    <main class="flex-grow flex overflow-hidden">
+        
+        <!-- SIDEBAR -->
+        <aside class="w-16 bg-[#0b0d11] border-r border-slate-800 flex flex-col items-center py-4 gap-4 shrink-0 z-10">
+            <button onclick="setTab('html')" class="nav-btn w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-all active" title="index.html">
+                <i class="fab fa-html5 text-xl text-orange-500"></i>
+            </button>
+            <button onclick="setTab('css')" class="nav-btn w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-all" title="style.css">
+                <i class="fab fa-css3-alt text-xl text-blue-500"></i>
+            </button>
+            <button onclick="setTab('js')" class="nav-btn w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-all" title="script.js">
+                <i class="fab fa-js text-xl text-yellow-400"></i>
+            </button>
+            <button onclick="setTab('readme')" class="nav-btn w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-all" title="README.md">
+                <i class="fab fa-markdown text-xl text-white"></i>
+            </button>
+            
+            <div class="h-px w-8 bg-slate-800 my-2"></div>
+            
+            <button onclick="showTemplates()" class="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-accent hover:bg-slate-800 transition-all" title="Templates">
+                <i class="fas fa-wand-magic-sparkles text-lg"></i>
+            </button>
+            
+            <div class="mt-auto flex flex-col gap-4">
+                 <button onclick="togglePreview()" class="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-all" title="Toggle Preview">
+                    <i class="fas fa-columns text-lg"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- EDITOR AREA -->
+        <section class="flex-grow flex flex-col relative bg-[#0f1115]">
+            <!-- File Info Bar -->
+            <div class="h-10 border-b border-slate-800 flex items-center justify-between px-4 bg-[#0f1115]">
+                <div class="flex items-center gap-2">
+                    <i id="fileIcon" class="fab fa-html5 text-orange-500"></i>
+                    <span id="fileName" class="font-mono text-xs text-slate-300">index.html</span>
+                    <span id="unsavedIndicator" class="w-2 h-2 rounded-full bg-accent hidden"></span>
+                </div>
+                <div class="flex items-center gap-3">
+                     <span id="statusMsg" class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Ready</span>
+                </div>
+            </div>
+
+            <!-- Code Editor -->
+            <div class="flex-grow relative group">
+                <textarea id="mainEditor" spellcheck="false" class="code-area w-full h-full p-6 resize-none outline-none text-sm z-10 relative" oninput="handleInput()"></textarea>
+                <div class="absolute inset-0 pointer-events-none p-6 text-sm font-mono text-slate-700 -z-0 opacity-20 hidden">
+                    <!-- Placeholder for syntax highlighting logic if we added it -->
+                </div>
+            </div>
+
+            <!-- Bottom Actions -->
+            <div class="h-16 border-t border-slate-800 bg-[#0b0d11] flex items-center justify-between px-6 shrink-0">
+                <div class="flex items-center gap-3 w-1/2">
+                     <div class="relative w-full">
+                        <i class="fas fa-code-commit absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                        <input type="text" id="commitMsg" class="bg-slate-900/50 border border-slate-700 rounded-lg py-2 pl-9 pr-3 text-xs w-full outline-none focus:border-slate-500 text-slate-300" placeholder="Commit message (e.g., 'Update styling')">
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="deployBtn" onclick="deploy()" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20 active:scale-95">
+                        <i class="fas fa-rocket"></i> Deploy
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- PREVIEW AREA -->
+        <section id="previewPanel" class="w-[45%] border-l border-slate-800 bg-white relative flex flex-col transition-all duration-300">
+            <div class="h-10 bg-slate-100 border-b border-slate-200 flex items-center justify-between px-3">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <i class="fas fa-circle text-red-400 text-[6px]"></i> Live Preview
+                </span>
+                <div class="flex gap-2">
+                    <button onclick="refreshPreview()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-sync-alt text-xs"></i></button>
+                    <button onclick="window.open(document.getElementById('previewFrame').src)" class="text-slate-400 hover:text-slate-600"><i class="fas fa-external-link-alt text-xs"></i></button>
+                    <button onclick="togglePreview()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-xs"></i></button>
+                </div>
+            </div>
+            <iframe id="previewFrame" class="flex-grow w-full h-full bg-white"></iframe>
+            
+            <!-- Deployment Success Overlay -->
+            <div id="deployOverlay" class="absolute inset-0 bg-slate-900/95 backdrop-blur-md z-50 flex flex-col items-center justify-center text-center p-8 hidden animate-slide-in">
+                <div class="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mb-6">
+                    <i class="fas fa-check text-2xl text-green-500"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-white mb-2">Deployed Successfully!</h2>
+                <p class="text-slate-400 text-sm mb-8">Your changes are propagating to GitHub Pages.</p>
+                <div class="flex gap-4">
+                    <a id="liveLink" href="#" target="_blank" class="bg-green-500 hover:bg-green-400 text-black font-bold py-3 px-8 rounded-xl transition-all active:scale-95 text-xs uppercase tracking-widest">
+                        Visit Live Site
+                    </a>
+                    <button onclick="closeOverlay()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-8 rounded-xl transition-all text-xs uppercase tracking-widest">
+                        Keep Editing
+                    </button>
+                </div>
+            </div>
+
+             <!-- Deployment Loading Overlay -->
+            <div id="loadingOverlay" class="absolute inset-0 bg-slate-900/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center text-center p-8 hidden">
+                <div class="loader-ring mb-4"></div>
+                <h3 class="text-lg font-bold text-white">Deploying...</h3>
+                <p id="loadingStep" class="text-slate-500 text-xs mt-2 font-mono">Uploading index.html</p>
+                
+                <div class="w-64 h-1 bg-slate-800 rounded-full mt-6 overflow-hidden">
+                    <div id="progressBar" class="h-full bg-blue-500 w-0 transition-all duration-300"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- TEMPLATES MODAL -->
+    <div id="templateModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4" onclick="if(event.target === this) this.classList.add('hidden')">
+        <div class="bg-[#1e293b] border border-slate-700 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl">
+            <div class="p-6 border-b border-slate-700 flex justify-between items-center">
+                <h2 class="text-lg font-bold text-white">Choose a Template</h2>
+                <button onclick="document.getElementById('templateModal').classList.add('hidden')" class="text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="grid grid-cols-2 gap-4 p-6">
+                <!-- Template Cards -->
+                <div onclick="loadTemplate('landing')" class="group p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:bg-slate-700 cursor-pointer transition-all hover:border-accent">
+                    <div class="w-8 h-8 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center mb-3"><i class="fas fa-rocket"></i></div>
+                    <h3 class="text-white font-bold text-sm mb-1">Modern Landing Page</h3>
+                    <p class="text-slate-400 text-xs">Responsive hero section, features grid, and footer.</p>
+                </div>
+                
+                <div onclick="loadTemplate('portfolio')" class="group p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:bg-slate-700 cursor-pointer transition-all hover:border-accent">
+                    <div class="w-8 h-8 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center mb-3"><i class="fas fa-user-circle"></i></div>
+                    <h3 class="text-white font-bold text-sm mb-1">Developer Portfolio</h3>
+                    <p class="text-slate-400 text-xs">Clean layout for showcasing projects and skills.</p>
+                </div>
+
+                <div onclick="loadTemplate('app')" class="group p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:bg-slate-700 cursor-pointer transition-all hover:border-accent">
+                    <div class="w-8 h-8 rounded bg-green-500/20 text-green-400 flex items-center justify-center mb-3"><i class="fas fa-mobile-alt"></i></div>
+                    <h3 class="text-white font-bold text-sm mb-1">Web App Starter</h3>
+                    <p class="text-slate-400 text-xs">Interactive button logic and state management example.</p>
+                </div>
+
+                <div onclick="loadTemplate('blank')" class="group p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:bg-slate-700 cursor-pointer transition-all hover:border-accent">
+                    <div class="w-8 h-8 rounded bg-slate-500/20 text-slate-400 flex items-center justify-center mb-3"><i class="fas fa-file"></i></div>
+                    <h3 class="text-white font-bold text-sm mb-1">Blank Slate</h3>
+                    <p class="text-slate-400 text-xs">Start from scratch with empty files.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- STATE MANAGEMENT ---
+        const state = {
+            files: {
+                'html': '<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>My Awesome Site</title>\n    <link rel="stylesheet" href="style.css">\n</head>\n<body>\n    <div class="container">\n        <h1>Hello World</h1>\n        <p>Edit me in GitFast Ultra</p>\n        <button id="btn">Click Me</button>\n    </div>\n    <script src="script.js"><\/script>\n</body>\n</html>',
+                'css': 'body {\n    background: #f0f0f0;\n    font-family: sans-serif;\n    display: flex;\n    justify-content: center;\n    align-items: center;\n    height: 100vh;\n    margin: 0;\n}\n.container {\n    background: white;\n    padding: 2rem;\n    border-radius: 12px;\n    box-shadow: 0 4px 6px rgba(0,0,0,0.1);\n    text-align: center;\n}\nh1 { color: #333; }\nbutton {\n    background: #007bff;\n    color: white;\n    border: none;\n    padding: 10px 20px;\n    border-radius: 6px;\n    cursor: pointer;\n}\nbutton:hover { background: #0056b3; }',
+                'js': 'document.getElementById("btn").addEventListener("click", () => {\n    alert("Hello from GitFast Ultra!");\n});',
+                'readme': '# My Awesome Project\n\nDeployed with GitFast Ultra.'
+            },
+            currentTab: 'html',
+            token: localStorage.getItem('gitfast_token') || '',
+            user: null,
+            repos: [],
+            currentRepo: '',
+            previewActive: true
+        };
+
+        const fileMetadata = {
+            'html': { name: 'index.html', icon: 'fa-html5', color: 'text-orange-500' },
+            'css': { name: 'style.css', icon: 'fa-css3-alt', color: 'text-blue-500' },
+            'js': { name: 'script.js', icon: 'fa-js', color: 'text-yellow-400' },
+            'readme': { name: 'README.md', icon: 'fa-markdown', color: 'text-white' }
+        };
+
+        // --- INIT ---
+        window.onload = async () => {
+            if (state.token) {
+                document.getElementById('ghToken').value = '••••••••'; // Masked
+                await fetchUserData();
+                fetchRepos();
+            }
+            setTab('html');
+            refreshPreview();
+        };
+
+        // --- AUTH & USER DATA ---
+        async function fetchUserData() {
+            try {
+                const res = await fetch('https://api.github.com/user', {
+                    headers: { 'Authorization': `token ${state.token}` }
+                });
+                if (res.ok) {
+                    state.user = await res.json();
+                    document.getElementById('userAvatar').src = state.user.avatar_url;
+                    document.getElementById('userName').innerText = state.user.login;
+                    document.getElementById('userProfile').classList.remove('hidden');
+                    document.getElementById('userProfile').classList.add('flex');
+                    document.getElementById('tokenContainer').classList.add('hidden'); // Hide input once auth'd
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        async function fetchRepos() {
+            try {
+                const res = await fetch(`https://api.github.com/user/repos?sort=updated&per_page=100`, {
+                    headers: { 'Authorization': `token ${state.token}` }
+                });
+                if (res.ok) {
+                    state.repos = await res.json();
+                    renderRepoList();
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        function saveToken(val) {
+            if (val.trim().startsWith('ghp_')) {
+                state.token = val.trim();
+                localStorage.setItem('gitfast_token', state.token);
+                fetchUserData();
+                fetchRepos();
+            }
+        }
+
+        // --- REPO HANDLING ---
+        function toggleRepoDropdown() {
+            const dd = document.getElementById('repoDropdown');
+            dd.classList.toggle('hidden');
+        }
+
+        function renderRepoList(filter = '') {
+            const list = document.getElementById('repoList');
+            const filtered = state.repos.filter(r => r.full_name.toLowerCase().includes(filter.toLowerCase()));
+            
+            if (filtered.length === 0 && !state.user) {
+                list.innerHTML = '<div class="p-4 text-center text-slate-500 text-xs italic">Connect token to load repos</div>';
+                return;
+            }
+
+            list.innerHTML = filtered.map(r => `
+                <div onclick="selectRepo('${r.full_name}')" class="p-3 border-b border-slate-800 hover:bg-slate-800 cursor-pointer transition-colors flex items-center justify-between group">
+                    <div>
+                        <div class="font-bold text-slate-300 text-xs group-hover:text-white">${r.name}</div>
+                        <div class="text-[10px] text-slate-500">${new Date(r.updated_at).toLocaleDateString()}</div>
+                    </div>
+                    ${r.has_pages ? '<i class="fas fa-globe text-green-500 text-xs" title="Pages Active"></i>' : ''}
+                </div>
+            `).join('');
+        }
+
+        function handleRepoInput(val) {
+            state.currentRepo = val;
+            renderRepoList(val);
+            if (val.length > 0) document.getElementById('repoDropdown').classList.remove('hidden');
+        }
+
+        function selectRepo(name) {
+            state.currentRepo = name;
+            document.getElementById('repoNameInput').value = name;
+            document.getElementById('repoDropdown').classList.add('hidden');
+        }
+
+        // --- EDITOR LOGIC ---
+        function setTab(type) {
+            // Save current content
+            state.files[state.currentTab] = document.getElementById('mainEditor').value;
+            
+            // Switch State
+            state.currentTab = type;
+            const editor = document.getElementById('mainEditor');
+            editor.value = state.files[type];
+            
+            // UI Updates
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active', 'text-white', 'bg-slate-800'));
+            // Find button by onclick attribute (simple hack)
+            const activeBtn = document.querySelector(`button[onclick="setTab('${type}')"]`);
+            if (activeBtn) activeBtn.classList.add('active', 'text-white', 'bg-slate-800');
+
+            // Header Info
+            const meta = fileMetadata[type];
+            document.getElementById('fileName').innerText = meta.name;
+            document.getElementById('fileIcon').className = `fab ${meta.icon} ${meta.color}`;
+        }
+
+        function handleInput() {
+            state.files[state.currentTab] = document.getElementById('mainEditor').value;
+            if (state.previewActive) {
+                clearTimeout(window.previewTimer);
+                window.previewTimer = setTimeout(refreshPreview, 800);
+            }
+        }
+
+        // --- PREVIEW LOGIC ---
+        function togglePreview() {
+            const panel = document.getElementById('previewPanel');
+            state.previewActive = !state.previewActive;
+            if (state.previewActive) {
+                panel.classList.remove('hidden');
+                refreshPreview();
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
+        function refreshPreview() {
+            const frame = document.getElementById('previewFrame');
+            const html = state.files['html'];
+            const css = state.files['css'];
+            const js = state.files['js'];
+
+            // Inject CSS and JS into HTML for preview
+            const doc = frame.contentWindow.document;
+            doc.open();
+            doc.write(html);
+            
+            // Inject CSS
+            const style = doc.createElement('style');
+            style.textContent = css;
+            doc.head.appendChild(style);
+
+            // Inject JS (Safe-ish)
+            const script = doc.createElement('script');
+            script.textContent = `
+                try {
+                    ${js}
+                } catch(e) { console.error(e); }
+            `;
+            doc.body.appendChild(script);
+            
+            doc.close();
+        }
+
+        // --- DEPLOYMENT LOGIC ---
+        async function deploy() {
+            if (!state.token || !state.currentRepo) {
+                alert("Please enter a GitHub Token and Repository Name.");
+                return;
+            }
+
+            // Save current tab before deploying
+            state.files[state.currentTab] = document.getElementById('mainEditor').value;
+
+            const btn = document.getElementById('deployBtn');
+            const loader = document.getElementById('loadingOverlay');
+            const progressBar = document.getElementById('progressBar');
+            const stepText = document.getElementById('loadingStep');
+            
+            btn.disabled = true;
+            loader.classList.remove('hidden');
+            
+            try {
+                // 1. Check/Create Repo
+                stepText.innerText = "Checking Repository...";
+                progressBar.style.width = "10%";
+                
+                const [owner, repoName] = state.currentRepo.includes('/') ? state.currentRepo.split('/') : [state.user.login, state.currentRepo];
+                
+                const check = await fetch(`https://api.github.com/repos/${owner}/${repoName}`, { headers: { 'Authorization': `token ${state.token}` } });
+                
+                if (check.status === 404) {
+                    stepText.innerText = "Creating Repository...";
+                    await fetch('https://api.github.com/user/repos', {
+                        method: 'POST',
+                        headers: { 'Authorization': `token ${state.token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: repoName, auto_init: true, description: "Created with GitFast Ultra" })
+                    });
+                    // Wait a bit for propagation
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+
+                // 2. Upload Files Sequentially
+                const filesToUpload = [
+                    { path: 'index.html', content: state.files['html'] },
+                    { path: 'style.css', content: state.files['css'] },
+                    { path: 'script.js', content: state.files['js'] },
+                    { path: 'README.md', content: state.files['readme'] }
+                ];
+
+                const total = filesToUpload.length;
+                let completed = 0;
+
+                for (const file of filesToUpload) {
+                    stepText.innerText = `Uploading ${file.path}...`;
+                    progressBar.style.width = `${20 + ((completed / total) * 60)}%`;
+                    
+                    // Get SHA if exists
+                    let sha = null;
+                    const getRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}/contents/${file.path}`, { 
+                        headers: { 'Authorization': `token ${state.token}` } 
+                    });
+                    if (getRes.ok) sha = (await getRes.json()).sha;
+
+                    // PUT File
+                    await fetch(`https://api.github.com/repos/${owner}/${repoName}/contents/${file.path}`, {
+                        method: 'PUT',
+                        headers: { 'Authorization': `token ${state.token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            message: document.getElementById('commitMsg').value || `Update ${file.path} via GitFast Ultra`,
+                            content: btoa(unescape(encodeURIComponent(file.content))),
+                            sha: sha
+                        })
+                    });
+                    completed++;
+                }
+
+                // 3. Enable Pages
+                stepText.innerText = "Enabling GitHub Pages...";
+                progressBar.style.width = "90%";
+                await fetch(`https://api.github.com/repos/${owner}/${repoName}/pages`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `token ${state.token}`, 'Accept': 'application/vnd.github.v3+json' },
+                    body: JSON.stringify({ source: { branch: 'main', path: '/' } })
+                }).catch(e => console.log("Pages might already be active"));
+
+                progressBar.style.width = "100%";
+                stepText.innerText = "Done!";
+                
+                setTimeout(() => {
+                    loader.classList.add('hidden');
+                    const url = `https://${owner}.github.io/${repoName}/`;
+                    document.getElementById('liveLink').href = url;
+                    document.getElementById('deployOverlay').classList.remove('hidden');
+                }, 500);
+
+            } catch (e) {
+                alert("Error: " + e.message);
+                loader.classList.add('hidden');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function closeOverlay() {
+            document.getElementById('deployOverlay').classList.add('hidden');
+        }
+
+        // --- TEMPLATES ---
+        function showTemplates() {
+            document.getElementById('templateModal').classList.remove('hidden');
+        }
+
+        function loadTemplate(type) {
+            const templates = {
+                'landing': {
+                    html: `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>Modern Landing</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <header>\n    <nav>\n      <div class="logo">Brand</div>\n      <ul>\n        <li><a href="#features">Features</a></li>\n        <li><a href="#contact">Contact</a></li>\n      </ul>\n    </nav>\n  </header>\n  <section class="hero">\n    <h1>Build Faster.</h1>\n    <p>The ultimate tool for developers.</p>\n    <button onclick="cta()">Get Started</button>\n  </section>\n  <script src="script.js"><\/script>\n</body>\n</html>`,
+                    css: `body { margin: 0; font-family: 'Inter', sans-serif; background: #111; color: #fff; }\nnav { display: flex; justify-content: space-between; padding: 20px 40px; align-items: center; }\n.logo { font-weight: 800; font-size: 1.5rem; }\nul { list-style: none; display: flex; gap: 20px; }\na { color: #ccc; text-decoration: none; transition: 0.3s; }\na:hover { color: #fff; }\n.hero { height: 80vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }\nh1 { font-size: 4rem; margin: 0; background: linear-gradient(to right, #4facfe, #00f2fe); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\np { font-size: 1.2rem; color: #888; max-width: 500px; }\nbutton { margin-top: 20px; padding: 15px 40px; border-radius: 30px; border: none; background: #fff; color: #000; font-weight: bold; cursor: pointer; transition: transform 0.2s; }\nbutton:hover { transform: scale(1.05); }`,
+                    js: `function cta() {\n  alert("Welcome to the future!");\n}`
+                },
+                'portfolio': {
+                    html: `<!DOCTYPE html>\n<html>\n<head>\n<title>Portfolio</title>\n<link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <div class="profile">\n    <div class="avatar"></div>\n    <h1>John Doe</h1>\n    <h3>Full Stack Developer</h3>\n    <div class="links">\n       <a href="#">GitHub</a>\n       <a href="#">Twitter</a>\n    </div>\n  </div>\n</body>\n</html>`,
+                    css: `body { background: #f8f9fa; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: sans-serif; }\n.profile { text-align: center; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }\n.avatar { width: 100px; height: 100px; background: #333; border-radius: 50%; margin: 0 auto 20px; }\nh1 { margin: 0; color: #333; }\nh3 { color: #666; font-weight: 400; }\n.links { margin-top: 20px; }\na { margin: 0 10px; color: #007bff; text-decoration: none; }`,
+                    js: `console.log("Portfolio loaded");`
+                },
+                'app': {
+                    html: `<!DOCTYPE html>\n<html>\n<head>\n<title>Counter App</title>\n<link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <div class="card">\n    <h2>Counter</h2>\n    <div id="count">0</div>\n    <div class="controls">\n      <button onclick="update(-1)">-</button>\n      <button onclick="update(1)">+</button>\n    </div>\n  </div>\n<script src="script.js"><\/script>\n</body>\n</html>`,
+                    css: `body { background: #2c3e50; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }\n.card { background: rgba(0,0,0,0.3); padding: 40px; border-radius: 10px; text-align: center; width: 200px; }\n#count { font-size: 4rem; font-weight: bold; margin: 20px 0; }\nbutton { font-size: 1.5rem; width: 50px; height: 50px; background: white; border: none; border-radius: 50%; cursor: pointer; margin: 0 10px; }\nbutton:hover { background: #ecf0f1; }`,
+                    js: `let count = 0;\nfunction update(val) {\n  count += val;\n  document.getElementById('count').innerText = count;\n}`
+                },
+                'blank': { html: '', css: '', js: '' }
+            };
+
+            const t = templates[type];
+            state.files['html'] = t.html;
+            state.files['css'] = t.css;
+            state.files['js'] = t.js;
+            
+            // Reload Editor
+            document.getElementById('mainEditor').value = state.files[state.currentTab];
+            refreshPreview();
+            document.getElementById('templateModal').classList.add('hidden');
+        }
+
+    </script>
+</body>
+</html>
