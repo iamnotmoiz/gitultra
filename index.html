@@ -6,8 +6,7 @@
     <title>GitFast Ultra - The Ultimate GitHub IDE</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- Stripe JS for visual authenticity -->
-    <script src="https://js.stripe.com/v3/"></script>
+
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -109,14 +108,6 @@
             color: #38bdf8;
             border-bottom: 2px solid #38bdf8;
         }
-        
-        .pricing-card {
-            transition: all 0.3s ease;
-        }
-        .pricing-card:hover {
-            transform: translateY(-5px);
-            border-color: #38bdf8;
-        }
     </style>
 </head>
 <body class="h-screen flex flex-col text-sm">
@@ -154,12 +145,7 @@
         </div>
 
         <div class="flex items-center gap-4">
-            <!-- Credits Badge -->
-            <div class="hidden md:flex items-center gap-1.5 px-3 py-1 bg-slate-800/50 rounded-full border border-slate-700/50">
-                <i class="fas fa-coins text-yellow-500 text-[10px]"></i>
-                <span id="creditCount" class="text-[10px] font-mono text-slate-300">10 Credits</span>
-            </div>
-
+            
             <!-- User Status (Clickable) -->
             <div id="userProfile" onclick="openSettings()" class="hidden items-center gap-3 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 hover:border-slate-600 cursor-pointer transition-all">
                 <img id="userAvatar" src="" class="w-5 h-5 rounded-full border border-slate-700">
@@ -171,13 +157,18 @@
                 <input type="password" id="ghToken" oninput="saveToken(this.value)" class="bg-slate-900 border border-slate-700 focus:border-accent rounded-full py-1.5 pl-4 pr-10 text-xs outline-none w-32 focus:w-64 transition-all duration-300" placeholder="GitHub Token...">
                 <i class="fas fa-key absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
             </div>
+            
+            <!-- Settings Button -->
+            <button onclick="openSettings()" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+                <i class="fas fa-cog"></i>
+            </button>
         </div>
     </header>
 
     <!-- MAIN WORKSPACE -->
     <main class="flex-grow flex overflow-hidden">
         
-        <!-- SIDEBAR (Removed Templates) -->
+        <!-- SIDEBAR -->
         <aside class="w-16 bg-[#0b0d11] border-r border-slate-800 flex flex-col items-center py-4 gap-4 shrink-0 z-10">
             <button onclick="setTab('html')" class="nav-btn w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-all active" title="index.html">
                 <i class="fab fa-html5 text-xl text-orange-500"></i>
@@ -233,7 +224,7 @@
                 </div>
                 <div class="flex items-center gap-3">
                     <button id="deployBtn" onclick="deploy()" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20 active:scale-95">
-                        <i class="fas fa-rocket"></i> Deploy <span id="deployCost" class="opacity-70 text-[10px] ml-1">(-1)</span>
+                        <i class="fas fa-rocket"></i> Deploy
                     </button>
                 </div>
             </div>
@@ -285,7 +276,7 @@
             <div id="loadingOverlay" class="absolute inset-0 bg-slate-900/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center text-center p-8 hidden">
                 <div class="loader-ring mb-4"></div>
                 <h3 class="text-lg font-bold text-white">Deploying...</h3>
-                <p id="loadingStep" class="text-slate-500 text-xs mt-2 font-mono">Checking Credits...</p>
+                <p id="loadingStep" class="text-slate-500 text-xs mt-2 font-mono">Initializing...</p>
                 <div class="w-64 h-1 bg-slate-800 rounded-full mt-6 overflow-hidden">
                     <div id="progressBar" class="h-full bg-blue-500 w-0 transition-all duration-300"></div>
                 </div>
@@ -293,24 +284,23 @@
         </section>
     </main>
 
-    <!-- SETTINGS & PAYMENT MODAL -->
+    <!-- SETTINGS MODAL (Token Management Only) -->
     <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4" onclick="if(event.target === this) closeSettings()">
-        <div class="bg-[#1e293b] border border-slate-700 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div class="bg-[#1e293b] border border-slate-700 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col">
             <div class="p-6 border-b border-slate-700 flex justify-between items-center bg-[#0f172a]">
                 <div class="flex items-center gap-3">
                     <img id="settingsAvatar" class="w-10 h-10 rounded-full border border-slate-600">
                     <div>
                         <h2 id="settingsName" class="text-lg font-bold text-white">User Settings</h2>
-                        <p class="text-xs text-slate-400">Manage your account and billing</p>
+                        <p class="text-xs text-slate-400">Manage your connection</p>
                     </div>
                 </div>
                 <button onclick="closeSettings()" class="text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
             </div>
             
-            <div class="flex-grow overflow-y-auto p-8 bg-[#0f1115]">
-                
+            <div class="p-8 bg-[#0f1115]">
                 <!-- Token Section -->
-                <div class="mb-8">
+                <div>
                     <h3 class="text-sm font-bold text-white uppercase tracking-widest mb-4 border-l-2 border-accent pl-3">GitHub Connection</h3>
                     <div class="bg-[#1e293b] p-6 rounded-xl border border-slate-700">
                         <label class="block text-xs text-slate-400 mb-2">Personal Access Token</label>
@@ -319,62 +309,11 @@
                             <button onclick="updateTokenFromSettings()" class="bg-slate-700 hover:bg-slate-600 text-white px-6 rounded-lg text-xs font-bold uppercase tracking-wider">Update</button>
                         </div>
                         <p class="text-[10px] text-slate-500 mt-2">Token is stored locally in your browser. We do not sync it to any server.</p>
-                    </div>
-                </div>
-
-                <!-- Pricing Section -->
-                <div>
-                    <h3 class="text-sm font-bold text-white uppercase tracking-widest mb-4 border-l-2 border-green-500 pl-3">Deploy Credits</h3>
-                    <div class="flex items-center justify-between mb-6">
-                        <p class="text-slate-400 text-sm">Purchase credits to deploy your projects instantly. Credits never expire.</p>
-                        <div class="text-right">
-                             <span class="text-xs text-slate-500">Current Balance</span>
-                             <div class="text-2xl font-bold text-white" id="modalCreditDisplay">0</div>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <!-- Free Tier -->
-                        <div class="pricing-card bg-[#1e293b] border border-slate-700 p-6 rounded-2xl flex flex-col relative opacity-60">
-                            <div class="absolute top-0 right-0 bg-slate-700 text-white text-[10px] px-2 py-1 rounded-bl-lg rounded-tr-lg font-bold">USED</div>
-                            <h4 class="text-lg font-bold text-white mb-2">Starter</h4>
-                            <div class="text-3xl font-bold text-slate-400 mb-4">Free</div>
-                            <ul class="text-xs text-slate-400 space-y-2 mb-6 flex-grow">
-                                <li class="flex items-center gap-2"><i class="fas fa-check text-green-500"></i> 10 Initial Deploys</li>
-                                <li class="flex items-center gap-2"><i class="fas fa-check text-green-500"></i> Basic Support</li>
-                            </ul>
-                            <button disabled class="w-full py-3 rounded-lg bg-slate-700 text-slate-400 text-xs font-bold uppercase cursor-not-allowed">Claimed</button>
-                        </div>
-
-                        <!-- Basic Tier -->
-                        <div class="pricing-card bg-[#1e293b] border border-blue-500/30 p-6 rounded-2xl flex flex-col relative shadow-lg shadow-blue-500/10">
-                            <h4 class="text-lg font-bold text-white mb-2">Developer</h4>
-                            <div class="text-3xl font-bold text-white mb-4">£1.00</div>
-                            <ul class="text-xs text-slate-300 space-y-2 mb-6 flex-grow">
-                                <li class="flex items-center gap-2"><i class="fas fa-check text-accent"></i> <strong>100</strong> Deploys</li>
-                                <li class="flex items-center gap-2"><i class="fas fa-check text-accent"></i> Priority Queue</li>
-                            </ul>
-                            <button onclick="simulatePayment(100)" class="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase transition-colors">
-                                <i class="fab fa-stripe mr-1"></i> Pay with Card
-                            </button>
-                        </div>
-
-                        <!-- Pro Tier -->
-                        <div class="pricing-card bg-gradient-to-b from-[#1e293b] to-purple-900/20 border border-purple-500/30 p-6 rounded-2xl flex flex-col relative shadow-lg shadow-purple-500/10">
-                            <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-500 text-white text-[10px] px-3 py-1 rounded-full font-bold shadow-lg">BEST VALUE</div>
-                            <h4 class="text-lg font-bold text-white mb-2">Agency</h4>
-                            <div class="text-3xl font-bold text-white mb-4">$4.99</div>
-                            <ul class="text-xs text-slate-300 space-y-2 mb-6 flex-grow">
-                                <li class="flex items-center gap-2"><i class="fas fa-check text-purple-400"></i> <strong>1,000</strong> Deploys</li>
-                                <li class="flex items-center gap-2"><i class="fas fa-check text-purple-400"></i> Instant Propagation</li>
-                            </ul>
-                            <button onclick="simulatePayment(1000)" class="w-full py-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold uppercase transition-colors">
-                                <i class="fab fa-stripe mr-1"></i> Pay with Card
-                            </button>
+                        <div class="mt-4 pt-4 border-t border-slate-700">
+                            <button onclick="logout()" class="text-red-500 text-xs font-bold uppercase hover:text-red-400">Disconnect & Clear Token</button>
                         </div>
                     </div>
                 </div>
-
             </div>
         </div>
     </div>
@@ -390,7 +329,6 @@
             },
             currentTab: 'html',
             token: localStorage.getItem('gitfast_token') || '',
-            credits: parseInt(localStorage.getItem('gitfast_credits') || '10'),
             user: null,
             repos: [],
             currentRepo: '',
@@ -407,7 +345,6 @@
         // --- INIT ---
         window.onload = async () => {
             if ("Notification" in window) Notification.requestPermission();
-            updateCreditDisplay();
 
             if (state.token) {
                 document.getElementById('ghToken').value = '••••••••'; // Masked
@@ -419,12 +356,6 @@
             refreshPreview();
         };
 
-        function updateCreditDisplay() {
-            document.getElementById('creditCount').innerText = `${state.credits} Credits`;
-            document.getElementById('modalCreditDisplay').innerText = state.credits;
-            localStorage.setItem('gitfast_credits', state.credits);
-        }
-
         // --- AUTH & USER DATA ---
         async function fetchUserData() {
             try {
@@ -433,6 +364,7 @@
                 });
                 if (res.ok) {
                     state.user = await res.json();
+                    
                     // Top Bar UI
                     document.getElementById('userAvatar').src = state.user.avatar_url;
                     document.getElementById('userName').innerText = state.user.login;
@@ -478,6 +410,11 @@
             } else {
                 alert("Invalid Token format. Must start with ghp_");
             }
+        }
+
+        function logout() {
+            localStorage.removeItem('gitfast_token');
+            location.reload();
         }
 
         // --- REPO HANDLING & CONTENT LOADING ---
@@ -613,8 +550,13 @@
             doc.close();
         }
 
-        // --- SETTINGS & PAYMENT LOGIC ---
+        // --- SETTINGS LOGIC ---
         function openSettings() {
+            // Handle Guest State in Modal
+            if (!state.user) {
+                document.getElementById('settingsAvatar').src = 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png';
+                document.getElementById('settingsName').innerText = 'Guest User';
+            }
             document.getElementById('settingsModal').classList.remove('hidden');
         }
 
@@ -622,34 +564,10 @@
             document.getElementById('settingsModal').classList.add('hidden');
         }
 
-        function simulatePayment(amount) {
-            // In a real app, this would use Stripe.js to create a token/intent
-            const btn = event.target;
-            const originalText = btn.innerHTML;
-            
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-            btn.disabled = true;
-
-            setTimeout(() => {
-                state.credits += amount;
-                updateCreditDisplay();
-                alert(`Payment Successful! Added ${amount} credits.`);
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }, 1500);
-        }
-
         // --- DEPLOYMENT LOGIC ---
         async function deploy() {
             if (!state.token || !state.currentRepo) {
                 alert("Please enter a GitHub Token and Repository Name.");
-                return;
-            }
-
-            // CHECK CREDITS
-            if (state.credits <= 0) {
-                alert("Insufficient Deploy Credits. Please check your settings to top up.");
-                openSettings();
                 return;
             }
 
@@ -665,10 +583,6 @@
             loader.classList.remove('hidden');
             
             try {
-                // Deduct Credit (Simulated)
-                state.credits--;
-                updateCreditDisplay();
-
                 // 1. Check/Create Repo
                 stepText.innerText = "Checking Repository...";
                 progressBar.style.width = "10%";
