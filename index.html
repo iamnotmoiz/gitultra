@@ -6,6 +6,8 @@
     <title>GitFast Ultra - The Ultimate GitHub IDE</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Stripe JS for visual authenticity -->
+    <script src="https://js.stripe.com/v3/"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -107,6 +109,14 @@
             color: #38bdf8;
             border-bottom: 2px solid #38bdf8;
         }
+        
+        .pricing-card {
+            transition: all 0.3s ease;
+        }
+        .pricing-card:hover {
+            transform: translateY(-5px);
+            border-color: #38bdf8;
+        }
     </style>
 </head>
 <body class="h-screen flex flex-col text-sm">
@@ -144,8 +154,14 @@
         </div>
 
         <div class="flex items-center gap-4">
-            <!-- User Status -->
-            <div id="userProfile" class="hidden items-center gap-3 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800">
+            <!-- Credits Badge -->
+            <div class="hidden md:flex items-center gap-1.5 px-3 py-1 bg-slate-800/50 rounded-full border border-slate-700/50">
+                <i class="fas fa-coins text-yellow-500 text-[10px]"></i>
+                <span id="creditCount" class="text-[10px] font-mono text-slate-300">10 Credits</span>
+            </div>
+
+            <!-- User Status (Clickable) -->
+            <div id="userProfile" onclick="openSettings()" class="hidden items-center gap-3 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 hover:border-slate-600 cursor-pointer transition-all">
                 <img id="userAvatar" src="" class="w-5 h-5 rounded-full border border-slate-700">
                 <span id="userName" class="font-medium text-slate-300 text-xs">User</span>
             </div>
@@ -155,15 +171,13 @@
                 <input type="password" id="ghToken" oninput="saveToken(this.value)" class="bg-slate-900 border border-slate-700 focus:border-accent rounded-full py-1.5 pl-4 pr-10 text-xs outline-none w-32 focus:w-64 transition-all duration-300" placeholder="GitHub Token...">
                 <i class="fas fa-key absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
             </div>
-            
-            <a href="https://github.com/settings/tokens/new?scopes=repo,workflow" target="_blank" class="text-xs text-slate-500 hover:text-accent transition-colors" title="Get Token"><i class="fas fa-external-link-alt"></i></a>
         </div>
     </header>
 
     <!-- MAIN WORKSPACE -->
     <main class="flex-grow flex overflow-hidden">
         
-        <!-- SIDEBAR -->
+        <!-- SIDEBAR (Removed Templates) -->
         <aside class="w-16 bg-[#0b0d11] border-r border-slate-800 flex flex-col items-center py-4 gap-4 shrink-0 z-10">
             <button onclick="setTab('html')" class="nav-btn w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-all active" title="index.html">
                 <i class="fab fa-html5 text-xl text-orange-500"></i>
@@ -180,10 +194,6 @@
             
             <div class="h-px w-8 bg-slate-800 my-2"></div>
             
-            <button onclick="showTemplates()" class="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-accent hover:bg-slate-800 transition-all" title="Templates">
-                <i class="fas fa-wand-magic-sparkles text-lg"></i>
-            </button>
-            
             <div class="mt-auto flex flex-col gap-4">
                  <button onclick="togglePreview()" class="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-all" title="Toggle Preview">
                     <i class="fas fa-columns text-lg"></i>
@@ -198,7 +208,6 @@
                 <div class="flex items-center gap-2">
                     <i id="fileIcon" class="fab fa-html5 text-orange-500"></i>
                     <span id="fileName" class="font-mono text-xs text-slate-300">index.html</span>
-                    <span id="unsavedIndicator" class="w-2 h-2 rounded-full bg-accent hidden"></span>
                 </div>
                 <div class="flex items-center gap-3">
                      <span id="statusMsg" class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Ready</span>
@@ -208,8 +217,9 @@
             <!-- Code Editor -->
             <div class="flex-grow relative group">
                 <textarea id="mainEditor" spellcheck="false" class="code-area w-full h-full p-6 resize-none outline-none text-sm z-10 relative" oninput="handleInput()"></textarea>
-                <div class="absolute inset-0 pointer-events-none p-6 text-sm font-mono text-slate-700 -z-0 opacity-20 hidden">
-                    <!-- Placeholder for syntax highlighting logic if we added it -->
+                <!-- Loading overlay for fetching files -->
+                <div id="fileLoader" class="absolute inset-0 bg-slate-900/50 z-20 hidden flex items-center justify-center">
+                     <div class="loader-ring"></div>
                 </div>
             </div>
 
@@ -223,7 +233,7 @@
                 </div>
                 <div class="flex items-center gap-3">
                     <button id="deployBtn" onclick="deploy()" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20 active:scale-95">
-                        <i class="fas fa-rocket"></i> Deploy
+                        <i class="fas fa-rocket"></i> Deploy <span id="deployCost" class="opacity-70 text-[10px] ml-1">(-1)</span>
                     </button>
                 </div>
             </div>
@@ -243,7 +253,7 @@
             </div>
             <iframe id="previewFrame" class="flex-grow w-full h-full bg-white"></iframe>
             
-            <!-- Deployment Success Overlay (UPDATED WITH TIMER) -->
+            <!-- Deployment Success Overlay -->
             <div id="deployOverlay" class="absolute inset-0 bg-slate-900/95 backdrop-blur-md z-50 flex flex-col items-center justify-center text-center p-8 hidden animate-slide-in">
                 <div class="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mb-6">
                     <i class="fas fa-check text-2xl text-green-500"></i>
@@ -275,8 +285,7 @@
             <div id="loadingOverlay" class="absolute inset-0 bg-slate-900/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center text-center p-8 hidden">
                 <div class="loader-ring mb-4"></div>
                 <h3 class="text-lg font-bold text-white">Deploying...</h3>
-                <p id="loadingStep" class="text-slate-500 text-xs mt-2 font-mono">Uploading index.html</p>
-                
+                <p id="loadingStep" class="text-slate-500 text-xs mt-2 font-mono">Checking Credits...</p>
                 <div class="w-64 h-1 bg-slate-800 rounded-full mt-6 overflow-hidden">
                     <div id="progressBar" class="h-full bg-blue-500 w-0 transition-all duration-300"></div>
                 </div>
@@ -284,38 +293,88 @@
         </section>
     </main>
 
-    <!-- TEMPLATES MODAL -->
-    <div id="templateModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4" onclick="if(event.target === this) this.classList.add('hidden')">
-        <div class="bg-[#1e293b] border border-slate-700 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl">
-            <div class="p-6 border-b border-slate-700 flex justify-between items-center">
-                <h2 class="text-lg font-bold text-white">Choose a Template</h2>
-                <button onclick="document.getElementById('templateModal').classList.add('hidden')" class="text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+    <!-- SETTINGS & PAYMENT MODAL -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4" onclick="if(event.target === this) closeSettings()">
+        <div class="bg-[#1e293b] border border-slate-700 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="p-6 border-b border-slate-700 flex justify-between items-center bg-[#0f172a]">
+                <div class="flex items-center gap-3">
+                    <img id="settingsAvatar" class="w-10 h-10 rounded-full border border-slate-600">
+                    <div>
+                        <h2 id="settingsName" class="text-lg font-bold text-white">User Settings</h2>
+                        <p class="text-xs text-slate-400">Manage your account and billing</p>
+                    </div>
+                </div>
+                <button onclick="closeSettings()" class="text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
             </div>
-            <div class="grid grid-cols-2 gap-4 p-6">
-                <!-- Template Cards -->
-                <div onclick="loadTemplate('landing')" class="group p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:bg-slate-700 cursor-pointer transition-all hover:border-accent">
-                    <div class="w-8 h-8 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center mb-3"><i class="fas fa-rocket"></i></div>
-                    <h3 class="text-white font-bold text-sm mb-1">Modern Landing Page</h3>
-                    <p class="text-slate-400 text-xs">Responsive hero section, features grid, and footer.</p>
-                </div>
+            
+            <div class="flex-grow overflow-y-auto p-8 bg-[#0f1115]">
                 
-                <div onclick="loadTemplate('portfolio')" class="group p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:bg-slate-700 cursor-pointer transition-all hover:border-accent">
-                    <div class="w-8 h-8 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center mb-3"><i class="fas fa-user-circle"></i></div>
-                    <h3 class="text-white font-bold text-sm mb-1">Developer Portfolio</h3>
-                    <p class="text-slate-400 text-xs">Clean layout for showcasing projects and skills.</p>
+                <!-- Token Section -->
+                <div class="mb-8">
+                    <h3 class="text-sm font-bold text-white uppercase tracking-widest mb-4 border-l-2 border-accent pl-3">GitHub Connection</h3>
+                    <div class="bg-[#1e293b] p-6 rounded-xl border border-slate-700">
+                        <label class="block text-xs text-slate-400 mb-2">Personal Access Token</label>
+                        <div class="flex gap-4">
+                            <input type="password" id="settingsTokenInput" class="flex-grow bg-[#0f1115] border border-slate-700 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none" placeholder="ghp_xxxxxxxxxxxx">
+                            <button onclick="updateTokenFromSettings()" class="bg-slate-700 hover:bg-slate-600 text-white px-6 rounded-lg text-xs font-bold uppercase tracking-wider">Update</button>
+                        </div>
+                        <p class="text-[10px] text-slate-500 mt-2">Token is stored locally in your browser. We do not sync it to any server.</p>
+                    </div>
                 </div>
 
-                <div onclick="loadTemplate('app')" class="group p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:bg-slate-700 cursor-pointer transition-all hover:border-accent">
-                    <div class="w-8 h-8 rounded bg-green-500/20 text-green-400 flex items-center justify-center mb-3"><i class="fas fa-mobile-alt"></i></div>
-                    <h3 class="text-white font-bold text-sm mb-1">Web App Starter</h3>
-                    <p class="text-slate-400 text-xs">Interactive button logic and state management example.</p>
+                <!-- Pricing Section -->
+                <div>
+                    <h3 class="text-sm font-bold text-white uppercase tracking-widest mb-4 border-l-2 border-green-500 pl-3">Deploy Credits</h3>
+                    <div class="flex items-center justify-between mb-6">
+                        <p class="text-slate-400 text-sm">Purchase credits to deploy your projects instantly. Credits never expire.</p>
+                        <div class="text-right">
+                             <span class="text-xs text-slate-500">Current Balance</span>
+                             <div class="text-2xl font-bold text-white" id="modalCreditDisplay">0</div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- Free Tier -->
+                        <div class="pricing-card bg-[#1e293b] border border-slate-700 p-6 rounded-2xl flex flex-col relative opacity-60">
+                            <div class="absolute top-0 right-0 bg-slate-700 text-white text-[10px] px-2 py-1 rounded-bl-lg rounded-tr-lg font-bold">USED</div>
+                            <h4 class="text-lg font-bold text-white mb-2">Starter</h4>
+                            <div class="text-3xl font-bold text-slate-400 mb-4">Free</div>
+                            <ul class="text-xs text-slate-400 space-y-2 mb-6 flex-grow">
+                                <li class="flex items-center gap-2"><i class="fas fa-check text-green-500"></i> 10 Initial Deploys</li>
+                                <li class="flex items-center gap-2"><i class="fas fa-check text-green-500"></i> Basic Support</li>
+                            </ul>
+                            <button disabled class="w-full py-3 rounded-lg bg-slate-700 text-slate-400 text-xs font-bold uppercase cursor-not-allowed">Claimed</button>
+                        </div>
+
+                        <!-- Basic Tier -->
+                        <div class="pricing-card bg-[#1e293b] border border-blue-500/30 p-6 rounded-2xl flex flex-col relative shadow-lg shadow-blue-500/10">
+                            <h4 class="text-lg font-bold text-white mb-2">Developer</h4>
+                            <div class="text-3xl font-bold text-white mb-4">£1.00</div>
+                            <ul class="text-xs text-slate-300 space-y-2 mb-6 flex-grow">
+                                <li class="flex items-center gap-2"><i class="fas fa-check text-accent"></i> <strong>100</strong> Deploys</li>
+                                <li class="flex items-center gap-2"><i class="fas fa-check text-accent"></i> Priority Queue</li>
+                            </ul>
+                            <button onclick="simulatePayment(100)" class="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase transition-colors">
+                                <i class="fab fa-stripe mr-1"></i> Pay with Card
+                            </button>
+                        </div>
+
+                        <!-- Pro Tier -->
+                        <div class="pricing-card bg-gradient-to-b from-[#1e293b] to-purple-900/20 border border-purple-500/30 p-6 rounded-2xl flex flex-col relative shadow-lg shadow-purple-500/10">
+                            <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-500 text-white text-[10px] px-3 py-1 rounded-full font-bold shadow-lg">BEST VALUE</div>
+                            <h4 class="text-lg font-bold text-white mb-2">Agency</h4>
+                            <div class="text-3xl font-bold text-white mb-4">$4.99</div>
+                            <ul class="text-xs text-slate-300 space-y-2 mb-6 flex-grow">
+                                <li class="flex items-center gap-2"><i class="fas fa-check text-purple-400"></i> <strong>1,000</strong> Deploys</li>
+                                <li class="flex items-center gap-2"><i class="fas fa-check text-purple-400"></i> Instant Propagation</li>
+                            </ul>
+                            <button onclick="simulatePayment(1000)" class="w-full py-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold uppercase transition-colors">
+                                <i class="fab fa-stripe mr-1"></i> Pay with Card
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                <div onclick="loadTemplate('blank')" class="group p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:bg-slate-700 cursor-pointer transition-all hover:border-accent">
-                    <div class="w-8 h-8 rounded bg-slate-500/20 text-slate-400 flex items-center justify-center mb-3"><i class="fas fa-file"></i></div>
-                    <h3 class="text-white font-bold text-sm mb-1">Blank Slate</h3>
-                    <p class="text-slate-400 text-xs">Start from scratch with empty files.</p>
-                </div>
             </div>
         </div>
     </div>
@@ -324,13 +383,14 @@
         // --- STATE MANAGEMENT ---
         const state = {
             files: {
-                'html': '<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>My Awesome Site</title>\n    <link rel="stylesheet" href="style.css">\n</head>\n<body>\n    <div class="container">\n        <h1>Hello World</h1>\n        <p>Edit me in GitFast Ultra</p>\n        <button id="btn">Click Me</button>\n    </div>\n    <script src="script.js"><\/script>\n</body>\n</html>',
-                'css': 'body {\n    background: #f0f0f0;\n    font-family: sans-serif;\n    display: flex;\n    justify-content: center;\n    align-items: center;\n    height: 100vh;\n    margin: 0;\n}\n.container {\n    background: white;\n    padding: 2rem;\n    border-radius: 12px;\n    box-shadow: 0 4px 6px rgba(0,0,0,0.1);\n    text-align: center;\n}\nh1 { color: #333; }\nbutton {\n    background: #007bff;\n    color: white;\n    border: none;\n    padding: 10px 20px;\n    border-radius: 6px;\n    cursor: pointer;\n}\nbutton:hover { background: #0056b3; }',
-                'js': 'document.getElementById("btn").addEventListener("click", () => {\n    alert("Hello from GitFast Ultra!");\n});',
-                'readme': '# My Awesome Project\n\nDeployed with GitFast Ultra.'
+                'html': '',
+                'css': '',
+                'js': '',
+                'readme': ''
             },
             currentTab: 'html',
             token: localStorage.getItem('gitfast_token') || '',
+            credits: parseInt(localStorage.getItem('gitfast_credits') || '10'),
             user: null,
             repos: [],
             currentRepo: '',
@@ -346,17 +406,24 @@
 
         // --- INIT ---
         window.onload = async () => {
-            // Request Notification Permission early
             if ("Notification" in window) Notification.requestPermission();
+            updateCreditDisplay();
 
             if (state.token) {
                 document.getElementById('ghToken').value = '••••••••'; // Masked
+                document.getElementById('settingsTokenInput').value = state.token;
                 await fetchUserData();
                 fetchRepos();
             }
             setTab('html');
             refreshPreview();
         };
+
+        function updateCreditDisplay() {
+            document.getElementById('creditCount').innerText = `${state.credits} Credits`;
+            document.getElementById('modalCreditDisplay').innerText = state.credits;
+            localStorage.setItem('gitfast_credits', state.credits);
+        }
 
         // --- AUTH & USER DATA ---
         async function fetchUserData() {
@@ -366,11 +433,16 @@
                 });
                 if (res.ok) {
                     state.user = await res.json();
+                    // Top Bar UI
                     document.getElementById('userAvatar').src = state.user.avatar_url;
                     document.getElementById('userName').innerText = state.user.login;
                     document.getElementById('userProfile').classList.remove('hidden');
                     document.getElementById('userProfile').classList.add('flex');
-                    document.getElementById('tokenContainer').classList.add('hidden'); // Hide input once auth'd
+                    document.getElementById('tokenContainer').classList.add('hidden');
+                    
+                    // Settings Modal UI
+                    document.getElementById('settingsAvatar').src = state.user.avatar_url;
+                    document.getElementById('settingsName').innerText = state.user.name || state.user.login;
                 }
             } catch (e) { console.error(e); }
         }
@@ -391,12 +463,24 @@
             if (val.trim().startsWith('ghp_')) {
                 state.token = val.trim();
                 localStorage.setItem('gitfast_token', state.token);
+                document.getElementById('settingsTokenInput').value = state.token;
                 fetchUserData();
                 fetchRepos();
             }
         }
 
-        // --- REPO HANDLING ---
+        function updateTokenFromSettings() {
+            const val = document.getElementById('settingsTokenInput').value.trim();
+            if (val.startsWith('ghp_')) {
+                saveToken(val);
+                alert("Token Updated Successfully");
+                closeSettings();
+            } else {
+                alert("Invalid Token format. Must start with ghp_");
+            }
+        }
+
+        // --- REPO HANDLING & CONTENT LOADING ---
         function toggleRepoDropdown() {
             const dd = document.getElementById('repoDropdown');
             dd.classList.toggle('hidden');
@@ -428,29 +512,64 @@
             if (val.length > 0) document.getElementById('repoDropdown').classList.remove('hidden');
         }
 
-        function selectRepo(name) {
+        async function selectRepo(name) {
             state.currentRepo = name;
             document.getElementById('repoNameInput').value = name;
             document.getElementById('repoDropdown').classList.add('hidden');
+            await loadRepoContent(name);
+        }
+
+        async function loadRepoContent(fullRepoName) {
+            // Show Loader
+            document.getElementById('fileLoader').classList.remove('hidden');
+            
+            const [owner, repo] = fullRepoName.includes('/') ? fullRepoName.split('/') : [state.user.login, fullRepoName];
+            const filesToFetch = ['index.html', 'style.css', 'script.js', 'README.md'];
+            
+            // Parallel fetch
+            await Promise.all(filesToFetch.map(async (fileName) => {
+                let key = '';
+                if(fileName === 'index.html') key = 'html';
+                else if(fileName === 'style.css') key = 'css';
+                else if(fileName === 'script.js') key = 'js';
+                else if(fileName === 'README.md') key = 'readme';
+
+                try {
+                    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${fileName}`, {
+                        headers: { 'Authorization': `token ${state.token}` }
+                    });
+                    
+                    if (res.ok) {
+                        const data = await res.json();
+                        // Handle UTF-8 decoding correctly
+                        const content = decodeURIComponent(escape(window.atob(data.content.replace(/\n/g, ""))));
+                        state.files[key] = content;
+                    } else {
+                        // File not found -> Empty default
+                        state.files[key] = '';
+                    }
+                } catch (e) {
+                    console.error(`Error loading ${fileName}`, e);
+                    state.files[key] = '';
+                }
+            }));
+
+            // Update UI
+            document.getElementById('mainEditor').value = state.files[state.currentTab];
+            refreshPreview();
+            document.getElementById('fileLoader').classList.add('hidden');
         }
 
         // --- EDITOR LOGIC ---
         function setTab(type) {
-            // Save current content
             state.files[state.currentTab] = document.getElementById('mainEditor').value;
-            
-            // Switch State
             state.currentTab = type;
-            const editor = document.getElementById('mainEditor');
-            editor.value = state.files[type];
+            document.getElementById('mainEditor').value = state.files[type];
             
-            // UI Updates
             document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active', 'text-white', 'bg-slate-800'));
-            // Find button by onclick attribute (simple hack)
             const activeBtn = document.querySelector(`button[onclick="setTab('${type}')"]`);
             if (activeBtn) activeBtn.classList.add('active', 'text-white', 'bg-slate-800');
 
-            // Header Info
             const meta = fileMetadata[type];
             document.getElementById('fileName').innerText = meta.name;
             document.getElementById('fileIcon').className = `fab ${meta.icon} ${meta.color}`;
@@ -482,26 +601,42 @@
             const css = state.files['css'];
             const js = state.files['js'];
 
-            // Inject CSS and JS into HTML for preview
             const doc = frame.contentWindow.document;
             doc.open();
             doc.write(html);
-            
-            // Inject CSS
             const style = doc.createElement('style');
             style.textContent = css;
             doc.head.appendChild(style);
-
-            // Inject JS (Safe-ish)
             const script = doc.createElement('script');
-            script.textContent = `
-                try {
-                    ${js}
-                } catch(e) { console.error(e); }
-            `;
+            script.textContent = `try { ${js} } catch(e) { console.error(e); }`;
             doc.body.appendChild(script);
-            
             doc.close();
+        }
+
+        // --- SETTINGS & PAYMENT LOGIC ---
+        function openSettings() {
+            document.getElementById('settingsModal').classList.remove('hidden');
+        }
+
+        function closeSettings() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+
+        function simulatePayment(amount) {
+            // In a real app, this would use Stripe.js to create a token/intent
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            btn.disabled = true;
+
+            setTimeout(() => {
+                state.credits += amount;
+                updateCreditDisplay();
+                alert(`Payment Successful! Added ${amount} credits.`);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 1500);
         }
 
         // --- DEPLOYMENT LOGIC ---
@@ -511,7 +646,14 @@
                 return;
             }
 
-            // Save current tab before deploying
+            // CHECK CREDITS
+            if (state.credits <= 0) {
+                alert("Insufficient Deploy Credits. Please check your settings to top up.");
+                openSettings();
+                return;
+            }
+
+            // Save current tab
             state.files[state.currentTab] = document.getElementById('mainEditor').value;
 
             const btn = document.getElementById('deployBtn');
@@ -523,6 +665,10 @@
             loader.classList.remove('hidden');
             
             try {
+                // Deduct Credit (Simulated)
+                state.credits--;
+                updateCreditDisplay();
+
                 // 1. Check/Create Repo
                 stepText.innerText = "Checking Repository...";
                 progressBar.style.width = "10%";
@@ -538,11 +684,10 @@
                         headers: { 'Authorization': `token ${state.token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify({ name: repoName, auto_init: true, description: "Created with GitFast Ultra" })
                     });
-                    // Wait a bit for propagation
                     await new Promise(r => setTimeout(r, 2000));
                 }
 
-                // 2. Upload Files Sequentially
+                // 2. Upload Files
                 const filesToUpload = [
                     { path: 'index.html', content: state.files['html'] },
                     { path: 'style.css', content: state.files['css'] },
@@ -554,17 +699,17 @@
                 let completed = 0;
 
                 for (const file of filesToUpload) {
+                    if(!file.content) { completed++; continue; } // Skip empty files if needed, or upload empty
+                    
                     stepText.innerText = `Uploading ${file.path}...`;
                     progressBar.style.width = `${20 + ((completed / total) * 60)}%`;
                     
-                    // Get SHA if exists
                     let sha = null;
                     const getRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}/contents/${file.path}`, { 
                         headers: { 'Authorization': `token ${state.token}` } 
                     });
                     if (getRes.ok) sha = (await getRes.json()).sha;
 
-                    // PUT File
                     await fetch(`https://api.github.com/repos/${owner}/${repoName}/contents/${file.path}`, {
                         method: 'PUT',
                         headers: { 'Authorization': `token ${state.token}`, 'Content-Type': 'application/json' },
@@ -593,13 +738,12 @@
                     loader.classList.add('hidden');
                     const url = `https://${owner}.github.io/${repoName}/`;
                     
-                    // --- TIMER LOGIC START ---
+                    // --- TIMER LOGIC ---
                     const overlay = document.getElementById('deployOverlay');
                     const timerDisplay = document.getElementById('deployTimer');
                     const visitBtn = document.getElementById('liveLink');
                     const propMsg = document.getElementById('propagationMessage');
 
-                    // Reset State
                     visitBtn.href = url;
                     visitBtn.classList.add('opacity-50', 'pointer-events-none', 'grayscale');
                     visitBtn.innerHTML = '<i class="fas fa-clock animate-spin"></i> Wait 30s...';
@@ -609,7 +753,6 @@
                     let timeLeft = 30;
                     timerDisplay.innerText = timeLeft;
 
-                    // Clear previous interval if any
                     if (window.deployInterval) clearInterval(window.deployInterval);
 
                     window.deployInterval = setInterval(() => {
@@ -623,7 +766,6 @@
                             visitBtn.innerHTML = '<i class="fas fa-external-link-alt"></i> Visit Live Site';
                             propMsg.innerText = "Propagation complete! Your site should be live now.";
                             
-                            // Send Notification
                             if (Notification.permission === "granted") {
                                 new Notification("Deployment Ready 🚀", {
                                     body: `Your site ${repoName} is now live!`,
@@ -632,7 +774,6 @@
                             }
                         }
                     }, 1000);
-                    // --- TIMER LOGIC END ---
 
                 }, 500);
 
@@ -647,42 +788,6 @@
         function closeOverlay() {
             document.getElementById('deployOverlay').classList.add('hidden');
             if (window.deployInterval) clearInterval(window.deployInterval);
-        }
-
-        // --- TEMPLATES ---
-        function showTemplates() {
-            document.getElementById('templateModal').classList.remove('hidden');
-        }
-
-        function loadTemplate(type) {
-            const templates = {
-                'landing': {
-                    html: `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>Modern Landing</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <header>\n    <nav>\n      <div class="logo">Brand</div>\n      <ul>\n        <li><a href="#features">Features</a></li>\n        <li><a href="#contact">Contact</a></li>\n      </ul>\n    </nav>\n  </header>\n  <section class="hero">\n    <h1>Build Faster.</h1>\n    <p>The ultimate tool for developers.</p>\n    <button onclick="cta()">Get Started</button>\n  </section>\n  <script src="script.js"><\/script>\n</body>\n</html>`,
-                    css: `body { margin: 0; font-family: 'Inter', sans-serif; background: #111; color: #fff; }\nnav { display: flex; justify-content: space-between; padding: 20px 40px; align-items: center; }\n.logo { font-weight: 800; font-size: 1.5rem; }\nul { list-style: none; display: flex; gap: 20px; }\na { color: #ccc; text-decoration: none; transition: 0.3s; }\na:hover { color: #fff; }\n.hero { height: 80vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }\nh1 { font-size: 4rem; margin: 0; background: linear-gradient(to right, #4facfe, #00f2fe); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\np { font-size: 1.2rem; color: #888; max-width: 500px; }\nbutton { margin-top: 20px; padding: 15px 40px; border-radius: 30px; border: none; background: #fff; color: #000; font-weight: bold; cursor: pointer; transition: transform 0.2s; }\nbutton:hover { transform: scale(1.05); }`,
-                    js: `function cta() {\n  alert("Welcome to the future!");\n}`
-                },
-                'portfolio': {
-                    html: `<!DOCTYPE html>\n<html>\n<head>\n<title>Portfolio</title>\n<link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <div class="profile">\n    <div class="avatar"></div>\n    <h1>John Doe</h1>\n    <h3>Full Stack Developer</h3>\n    <div class="links">\n       <a href="#">GitHub</a>\n       <a href="#">Twitter</a>\n    </div>\n  </div>\n</body>\n</html>`,
-                    css: `body { background: #f8f9fa; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: sans-serif; }\n.profile { text-align: center; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }\n.avatar { width: 100px; height: 100px; background: #333; border-radius: 50%; margin: 0 auto 20px; }\nh1 { margin: 0; color: #333; }\nh3 { color: #666; font-weight: 400; }\n.links { margin-top: 20px; }\na { margin: 0 10px; color: #007bff; text-decoration: none; }`,
-                    js: `console.log("Portfolio loaded");`
-                },
-                'app': {
-                    html: `<!DOCTYPE html>\n<html>\n<head>\n<title>Counter App</title>\n<link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <div class="card">\n    <h2>Counter</h2>\n    <div id="count">0</div>\n    <div class="controls">\n      <button onclick="update(-1)">-</button>\n      <button onclick="update(1)">+</button>\n    </div>\n  </div>\n<script src="script.js"><\/script>\n</body>\n</html>`,
-                    css: `body { background: #2c3e50; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }\n.card { background: rgba(0,0,0,0.3); padding: 40px; border-radius: 10px; text-align: center; width: 200px; }\n#count { font-size: 4rem; font-weight: bold; margin: 20px 0; }\nbutton { font-size: 1.5rem; width: 50px; height: 50px; background: white; border: none; border-radius: 50%; cursor: pointer; margin: 0 10px; }\nbutton:hover { background: #ecf0f1; }`,
-                    js: `let count = 0;\nfunction update(val) {\n  count += val;\n  document.getElementById('count').innerText = count;\n}`
-                },
-                'blank': { html: '', css: '', js: '' }
-            };
-
-            const t = templates[type];
-            state.files['html'] = t.html;
-            state.files['css'] = t.css;
-            state.files['js'] = t.js;
-            
-            // Reload Editor
-            document.getElementById('mainEditor').value = state.files[state.currentTab];
-            refreshPreview();
-            document.getElementById('templateModal').classList.add('hidden');
         }
 
     </script>
