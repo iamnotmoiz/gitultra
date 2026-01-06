@@ -1,5 +1,3 @@
-let count = 0;
-function update(val) {
-  count += val;
-  document.getElementById('count').innerText = count;
-}
+document.getElementById("btn").addEventListener("click", () => {
+    alert("Hello from GitFast Ultra!");
+});
