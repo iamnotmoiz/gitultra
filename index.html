@@ -243,15 +243,26 @@
             </div>
             <iframe id="previewFrame" class="flex-grow w-full h-full bg-white"></iframe>
             
-            <!-- Deployment Success Overlay -->
+            <!-- Deployment Success Overlay (UPDATED WITH TIMER) -->
             <div id="deployOverlay" class="absolute inset-0 bg-slate-900/95 backdrop-blur-md z-50 flex flex-col items-center justify-center text-center p-8 hidden animate-slide-in">
                 <div class="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mb-6">
                     <i class="fas fa-check text-2xl text-green-500"></i>
                 </div>
-                <h2 class="text-2xl font-bold text-white mb-2">Deployed Successfully!</h2>
-                <p class="text-slate-400 text-sm mb-8">Your changes are propagating to GitHub Pages.</p>
+                <h2 class="text-2xl font-bold text-white mb-2">Deployment Started!</h2>
+                
+                <div class="mb-8 mt-4">
+                    <div id="timerContainer" class="flex flex-col items-center p-6 bg-slate-800/50 rounded-2xl border border-slate-700">
+                        <span class="text-5xl font-mono font-bold text-white mb-2" id="deployTimer">30</span>
+                        <span class="text-[10px] text-accent uppercase tracking-widest font-bold">Seconds remaining</span>
+                    </div>
+                </div>
+
+                <p id="propagationMessage" class="text-slate-400 text-sm mb-8 max-w-xs mx-auto">
+                    Waiting for GitHub to propagate changes to avoid 404 errors.
+                </p>
+
                 <div class="flex gap-4">
-                    <a id="liveLink" href="#" target="_blank" class="bg-green-500 hover:bg-green-400 text-black font-bold py-3 px-8 rounded-xl transition-all active:scale-95 text-xs uppercase tracking-widest">
+                    <a id="liveLink" href="#" target="_blank" class="bg-green-500 hover:bg-green-400 text-black font-bold py-3 px-8 rounded-xl transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center gap-2">
                         Visit Live Site
                     </a>
                     <button onclick="closeOverlay()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-8 rounded-xl transition-all text-xs uppercase tracking-widest">
@@ -335,6 +346,9 @@
 
         // --- INIT ---
         window.onload = async () => {
+            // Request Notification Permission early
+            if ("Notification" in window) Notification.requestPermission();
+
             if (state.token) {
                 document.getElementById('ghToken').value = '••••••••'; // Masked
                 await fetchUserData();
@@ -578,8 +592,48 @@
                 setTimeout(() => {
                     loader.classList.add('hidden');
                     const url = `https://${owner}.github.io/${repoName}/`;
-                    document.getElementById('liveLink').href = url;
-                    document.getElementById('deployOverlay').classList.remove('hidden');
+                    
+                    // --- TIMER LOGIC START ---
+                    const overlay = document.getElementById('deployOverlay');
+                    const timerDisplay = document.getElementById('deployTimer');
+                    const visitBtn = document.getElementById('liveLink');
+                    const propMsg = document.getElementById('propagationMessage');
+
+                    // Reset State
+                    visitBtn.href = url;
+                    visitBtn.classList.add('opacity-50', 'pointer-events-none', 'grayscale');
+                    visitBtn.innerHTML = '<i class="fas fa-clock animate-spin"></i> Wait 30s...';
+                    propMsg.innerText = "Waiting for GitHub to propagate changes to avoid 404 errors.";
+                    overlay.classList.remove('hidden');
+
+                    let timeLeft = 30;
+                    timerDisplay.innerText = timeLeft;
+
+                    // Clear previous interval if any
+                    if (window.deployInterval) clearInterval(window.deployInterval);
+
+                    window.deployInterval = setInterval(() => {
+                        timeLeft--;
+                        timerDisplay.innerText = timeLeft;
+                        visitBtn.innerHTML = `<i class="fas fa-clock animate-spin"></i> Wait ${timeLeft}s...`;
+
+                        if (timeLeft <= 0) {
+                            clearInterval(window.deployInterval);
+                            visitBtn.classList.remove('opacity-50', 'pointer-events-none', 'grayscale');
+                            visitBtn.innerHTML = '<i class="fas fa-external-link-alt"></i> Visit Live Site';
+                            propMsg.innerText = "Propagation complete! Your site should be live now.";
+                            
+                            // Send Notification
+                            if (Notification.permission === "granted") {
+                                new Notification("Deployment Ready 🚀", {
+                                    body: `Your site ${repoName} is now live!`,
+                                    icon: "https://github.githubassets.com/favicons/favicon.png"
+                                });
+                            }
+                        }
+                    }, 1000);
+                    // --- TIMER LOGIC END ---
+
                 }, 500);
 
             } catch (e) {
@@ -592,6 +646,7 @@
 
         function closeOverlay() {
             document.getElementById('deployOverlay').classList.add('hidden');
+            if (window.deployInterval) clearInterval(window.deployInterval);
         }
 
         // --- TEMPLATES ---
